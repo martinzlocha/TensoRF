@@ -17,7 +17,7 @@ class BlenderDataset(Dataset):
         self.root_dir = datadir
         self.split = split
         self.is_stack = is_stack
-        self.img_wh = (int(800/downsample),int(800/downsample))
+        self.img_wh = (1009, 753)        
         self.define_transforms()
 
         self.scene_bbox = torch.tensor([[-1.5, -1.5, -1.5], [1.5, 1.5, 1.5]])
@@ -26,14 +26,14 @@ class BlenderDataset(Dataset):
         self.define_proj_mat()
 
         self.white_bg = True
-        self.near_far = [2.0,6.0]
+        self.near_far = [0.1,6.0]
         
         self.center = torch.mean(self.scene_bbox, axis=0).float().view(1, 1, 3)
         self.radius = (self.scene_bbox[1] - self.center).float().view(1, 1, 3)
         self.downsample=downsample
 
     def read_depth(self, filename):
-        depth = np.array(read_pfm(filename)[0], dtype=np.float32)  # (800, 800)
+        depth = np.array(read_pfm(filename)[0], dtype=np.float32)
         return depth
     
     def read_meta(self):
@@ -42,8 +42,8 @@ class BlenderDataset(Dataset):
             self.meta = json.load(f)
 
         w, h = self.img_wh
-        self.focal = 0.5 * 800 / np.tan(0.5 * self.meta['camera_angle_x'])  # original focal length
-        self.focal *= self.img_wh[0] / 800  # modify focal length to match size self.img_wh
+        self.focal = 0.5 * 1009 / np.tan(0.5 * self.meta['camera_angle_x'])  # original focal length
+        self.focal *= self.img_wh[0] / 1009  # modify focal length to match size self.img_wh
 
 
         # ray directions for all pixels, same for all images (same H, W, focal)
@@ -68,15 +68,14 @@ class BlenderDataset(Dataset):
             c2w = torch.FloatTensor(pose)
             self.poses += [c2w]
 
-            image_path = os.path.join(self.root_dir, f"{frame['file_path']}.png")
+            image_path = os.path.join(self.root_dir, f"{frame['file_path']}")
             self.image_paths += [image_path]
             img = Image.open(image_path)
             
             if self.downsample!=1.0:
                 img = img.resize(self.img_wh, Image.LANCZOS)
-            img = self.transform(img)  # (4, h, w)
-            img = img.view(4, -1).permute(1, 0)  # (h*w, 4) RGBA
-            img = img[:, :3] * img[:, -1:] + (1 - img[:, -1:])  # blend A to RGB
+            img = self.transform(img)  # (h, w, 3)
+            img = img.view(-1, 3)
             self.all_rgbs += [img]
 
 
